@@ -13,5 +13,5 @@ pub use builder::*;
 mod error;
 pub use error::*;
 
-pub mod keys;
+pub mod types;
 

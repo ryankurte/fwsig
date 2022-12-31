@@ -23,3 +23,21 @@ pub enum ManifestError {
     #[cfg_attr(feature = "thiserror", error("Signature verification failed"))]
     VerificationFailed,
 }
+
+/// Verification error enumeration
+#[derive(Copy, Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "thiserror", derive(thiserror::Error))]
+pub enum VerifyError {
+    #[cfg_attr(feature = "thiserror", error("app length mismatch"))]
+    AppLengthMismatch,
+    #[cfg_attr(feature = "thiserror", error("app checksum mismatch"))]
+    AppChecksumMismatch,
+    #[cfg_attr(feature = "thiserror", error("metadata length mismatch"))]
+    MetaLengthMismatch,
+    #[cfg_attr(feature = "thiserror", error("metadata checksum mismatch"))]
+    MetaChecksumMismatch,
+    #[cfg_attr(feature = "thiserror", error("invalid signature"))]
+    InvalidSignature,
+    #[cfg_attr(feature = "thiserror", error("signature verification failed"))]
+    VerificationFailed,
+}

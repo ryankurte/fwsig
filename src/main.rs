@@ -1,15 +1,18 @@
+//! fwsig command line utility
+//! 
+//! supports signing, packaging, and verifying binaries
 
 use std::{str::FromStr, fs::File, io::Write};
 
 use clap::Parser;
-use ed25519_dalek::Sha512;
-use encdec::{Encode, EncodeExt, Decode};
-use log::{debug, info, LevelFilter};
+use encdec::{EncodeExt, Decode};
+use log::{debug, info, error, LevelFilter, warn};
 use rand_core::OsRng;
 
 use fwsig::{
     MetadataFormat, ManifestError,
-    keys::{PrivateKey, PublicKey}, ManifestBuilder, MANIFEST_LEN, Manifest,
+    types::{PrivateKey, PublicKey}, 
+    ManifestBuilder, MANIFEST_LEN, Manifest,
 };
 use simplelog::SimpleLogger;
 
@@ -112,7 +115,7 @@ fn main() -> anyhow::Result<()> {
             let m = ManifestBuilder::new()
                 .app_bin(&app)
                 .meta_bin(meta_format, &meta)
-                .build::<OsRng>(key.map(|k| k.inner() ))?;
+                .build::<OsRng>(key)?;
             
             // TODO: pretty manifest display
             info!("Generated manifest: {:?}", m);
@@ -138,45 +141,82 @@ fn main() -> anyhow::Result<()> {
             drop(f);
         },
         Ops::VerifyAttached { app, keys } => {
+            debug!("Loading combined app file: '{}'", app);
+
             // Read comined app file
             let data = std::fs::read(app)?;
 
             // Parse manifest
             let b = &data[data.len() - MANIFEST_LEN..];
-            let (m, _) = Manifest::decode(&b).unwrap();
+            let (m, _) = match Manifest::decode(&b) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Failed to decode manifest: {:?}", e);
+                    return Err(anyhow::anyhow!("manifest decode failed"));
+                }
+            };
 
-            // TODO: pretty manifest display
             info!("Parsed manifest: {:?}", m);
 
-            // Check app components
+            // Check app and manifest lengths match
             if data.len() != m.app_len() + m.meta_len() + MANIFEST_LEN {
                 todo!("application length mismatch")
             }
-
             let app = &data[..m.app_len as usize];
-            let app_csum = Manifest::checksum(app);
-
-            if app_csum != m.app_csum {
-                todo!("application checksum mismatch")
-            }
-
             let meta = &data[m.app_len()..][..m.meta_len()];
-            let meta_csum = Manifest::checksum(meta);
 
-            if meta_csum != m.meta_csum {
-                todo!("metadata checksum mismatch")
+            // Check app and metadata match manifest
+            if let Err(e) = m.check(app, meta) {
+                error!("Manifest verification failed: {:?}", e);
+                return Err(e.into())
             }
 
-            // Check signature
-            let allowed_keys: Vec<_> = keys.iter().map(|k| k.clone().inner() ).collect();
-            if let Err(e) = m.verify(&allowed_keys) {
-                todo!("invalid app signature")
+            // If we have a set of allowed keys, check the signing key matches
+            if keys.len() > 0 {
+                debug!("Verifying signing keys");
+                m.verify(&keys)?;
+            
+            } else {
+                warn!("No public keys provided, skipping key verification");
             }
 
             info!("App signature OK!");
         },
         Ops::VerifyDetached { manifest, app, meta, keys } => {
-            todo!()
+            debug!("Loading manifest: '{}'", manifest);
+
+            // Load manifest
+            let d = std::fs::read(manifest)?;
+            let (m, _n) = match Manifest::decode(&d)  {
+                Ok(v) => v,
+                Err(e) => {
+                    error!("Failed to decode manifest: {:?}", e);
+                    return Err(anyhow::anyhow!("manifest decode failed"));
+                }
+            };
+
+            info!("Parsed manifest: {:?}", m);
+
+            // Load app and metadata
+            let app = std::fs::read(app)?;
+            let meta = std::fs::read(meta)?;
+            
+            // Check app and metadata match manifest
+            if let Err(e) = m.check(&app, &meta) {
+                error!("Manifest verification failed: {:?}", e);
+                return Err(e.into())
+            }
+
+            // If we have a set of allowed keys, check the signing key matches
+            if keys.len() > 0 {
+                debug!("Verifying signing keys");
+                m.verify(&keys)?;
+            
+            } else {
+                warn!("No public keys provided, skipping key verification");
+            }
+
+            info!("App signature OK!");
         },
     }
 
