@@ -1,0 +1,106 @@
+name: ci
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  build_cli:
+    name: Build fwsig CLI
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tgz
+
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tgz
+            apt-arch: arm64
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tgz
+
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+            archive: tgz
+            apt-arch: armhf
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            ext: .exe
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: FranzDiebold/github-env-vars-action@v1.2.1
+
+    - name: Configure toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        target:  ${{ matrix.target }}
+        override: true
+        components: rustfmt, clippy
+
+    - name: Setup caching
+      uses: actions/cache@v2
+      with:
+        key: ${{ matrix.os }}-${{ matrix.target }}-${{ github.run_id }}
+        restore-keys: ${{ matrix.platform }}-${{ matrix.target }}
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/
+
+    - name: Install cross toolchain (armv7)
+      if: ${{ matrix.target == 'armv7-unknown-linux-gnueabihf' }}
+      run: sudo apt install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
+
+    - name: Install cross toolchain (aarch64)
+      if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+      run: sudo apt install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+    - name: Build CLI
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ matrix.use_cross }}
+        command: build
+        args: --target ${{ matrix.target }} --release ${{ matrix.opts }}
+
+    - name: Copy CLI artifact
+      run: cp target/${{ matrix.target }}/release/fwsig${{ matrix.ext }} fwsig${{ matrix.ext }}
+
+    - name: Create archive (tgz, linux)
+      if: ${{ matrix.os != 'macos-latest' && matrix.os != 'windows-latest' }}
+      run: tar -czvf fwsig-${{ matrix.target }}.tgz fwsig${{ matrix.ext }}
+    
+    - name: Create archive (zip, windows)
+      if: ${{ matrix.os == 'windows-latest' }}
+      run: tar.exe -a -c -f fwsig-${{ matrix.target }}.zip fwsig${{ matrix.ext }}
+
+    - name: Create archive (zip, macos)
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: zip fwsig-${{ matrix.target }}.zip fwsig${{ matrix.ext }}
+
+    - name: Upload binary to release
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: fwsig-${{ matrix.target }}.${{ matrix.archive }}
+        asset_name: fwsig-${{ matrix.target }}.${{ matrix.archive }}
+        tag: ${{ github.ref }}
+        overwrite: true
