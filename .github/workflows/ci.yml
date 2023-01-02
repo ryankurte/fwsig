@@ -11,6 +11,37 @@ env:
 
 jobs:
 
+  test:
+    name: Run fwsig library tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: FranzDiebold/github-env-vars-action@v1.2.1
+
+    - name: Configure toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+        components: rustfmt, clippy
+
+    - name: Setup caching
+      uses: actions/cache@v2
+      with:
+        key: tests-${{ github.run_id }}
+        restore-keys: tests
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target/
+
+    - name: Run tests
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+
+
   build_cli:
     name: Build fwsig CLI
     runs-on: ${{ matrix.os }}

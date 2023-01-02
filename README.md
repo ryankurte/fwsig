@@ -3,8 +3,9 @@
 `fwsig` provides a simple specification for firmware manifests supporting firmware signing and verification, along with tooling for signing and verifying these manifests and packaging firmware into signed objects, and librar(y|ies) for parsing and using these manifests.
 
 
-
 ## Status
+
+stability is not _yet_ guaranteed as the initial specification is pending review / real-world use. if you have issues / suggestions / needs this does not fulfill please open an issue!
 
 [![ci](https://github.com/ryankurte/fwsig/actions/workflows/ci.yml/badge.svg)](https://github.com/ryankurte/fwsig/actions/workflows/ci.yml)
 [![Crates.io](https://img.shields.io/crates/v/fwsig.svg)](https://crates.io/crates/fwsig)
@@ -29,6 +30,8 @@ TODO
 Metadata support allows applications to be packaged with relevant meta-information for loading and execution, for example application names and versions, supported devices, and device configurations.
 Due to disparate application needs, metadata encoding is not specified, though helpers may be provided for specific formats (such as JSON or CBOR).
 
+For implementation details, please see the rust [reference implementation](https://docs.rs/fwsig).
+
 
 ### Packaging Applications
 
@@ -51,7 +54,7 @@ To load an application package one first parses the manifest using the constant 
 
 ### The Manifest Format
 
-The Manifest is a 144-byte constant-length little-endian object including the lengths and checksums for both the application and metadata.
+The Manifest is a 172-byte constant-length little-endian object including the manifest information, lengths and checksums for both the application and metadata, and the signing key and signature.
 
 ```text
  0                   1                   2                   3
