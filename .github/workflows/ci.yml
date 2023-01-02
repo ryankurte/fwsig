@@ -12,7 +12,7 @@ env:
 jobs:
 
   test:
-    name: Run fwsig library tests
+    name: Test library
     runs-on: ubuntu-latest
 
     steps:
@@ -43,7 +43,7 @@ jobs:
 
 
   build_cli:
-    name: Build fwsig CLI
+    name: Build CLI
     runs-on: ${{ matrix.os }}
     
     strategy:
@@ -89,7 +89,7 @@ jobs:
       uses: actions/cache@v2
       with:
         key: ${{ matrix.os }}-${{ matrix.target }}-${{ github.run_id }}
-        restore-keys: ${{ matrix.platform }}-${{ matrix.target }}
+        restore-keys: ${{ matrix.os }}-${{ matrix.target }}
         path: |
           ~/.cargo/registry
           ~/.cargo/git
