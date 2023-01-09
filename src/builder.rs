@@ -1,12 +1,14 @@
 //! [ManifestBuilder] for constructing [Manifest] objects
 
+use core::str::FromStr;
+
 use ed25519_dalek::{PUBLIC_KEY_LENGTH, SIGNATURE_LENGTH, SecretKey};
 use rand_core::{CryptoRng, RngCore};
 use sha2::{Digest, Sha512};
 
 use crate::{
     MetadataFormat, ManifestError, 
-    types::{Checksum, PublicKey, PrivateKey, Signature},
+    types::{Checksum, PublicKey, PrivateKey, Signature, Stringish},
     MANIFEST_VERSION};
 
 use super::{Manifest, Flags};
@@ -14,20 +16,33 @@ use super::{Manifest, Flags};
 /// Builder for constructing binary [Manifest] objects
 #[derive(Clone, PartialEq, Debug)]
 pub struct ManifestBuilder {
-    version: u16,
-    flags: Flags,
+    info: Info,
+
+    name: Stringish<16>,
+    version: Stringish<24>,
 
     app: Option<(u32, Checksum)>,
     meta: Option<(u16, MetadataFormat, Checksum)>,
     key: Option<PublicKey>,
 }
 
+/// Manifest object info
+#[derive(Clone, PartialEq, Debug)]
+struct Info {
+    version: u16,
+    flags: Flags,
+}
+
 impl ManifestBuilder {
     /// Create a new [ManifestBuilder] object
     pub fn new() -> Self {
-        Self{ 
-            version: MANIFEST_VERSION,
-            flags: Flags::empty(),
+        Self{
+            info: Info{
+                version: MANIFEST_VERSION,
+                flags: Flags::empty(),
+            },
+            name: Stringish::default(),
+            version: Stringish::default(),
             app: None,
             meta: None,
             key: None,
@@ -36,9 +51,21 @@ impl ManifestBuilder {
 
     /// Set manifest [Flags]
     pub fn flags(&mut self, flags: Flags) -> &mut Self {
-        self.flags = flags;
+        self.info.flags = flags;
 
         self
+    }
+
+    /// Set application name
+    pub fn name(&mut self, app_name: &str) -> Result<&mut Self, ()> {
+        self.name = Stringish::from_str(app_name)?;
+        Ok(self)
+    }
+
+    /// Set application version string
+    pub fn version(&mut self, app_version: &str) -> Result<&mut Self, ()> {
+        self.version = Stringish::from_str(app_version)?;
+        Ok(self)
     }
 
     /// Add app binary to manifest as bytes
@@ -84,7 +111,7 @@ impl ManifestBuilder {
             Some(v) => (v, false),
             None => (PrivateKey::generate(&mut RNG::default()), true),
         };
-        self.flags.set(Flags::TRANSIENT_KEY, transient);
+        self.info.flags.set(Flags::TRANSIENT_KEY, transient);
 
         // Set public key and flags
         let public_key = PublicKey::from(&secret_key);
@@ -103,8 +130,11 @@ impl ManifestBuilder {
         
         // Build manifest
         let mut m = Manifest {
-            version: self.version,
-            flags: self.flags.bits(),
+            version: self.info.version,
+            flags: self.info.flags.bits(),
+
+            app_name: self.name.clone(),
+            app_version: self.version.clone(),
 
             app_len: app.0,
             app_csum: app.1.clone(),

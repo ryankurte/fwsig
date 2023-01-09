@@ -54,39 +54,9 @@ To load an application package one first parses the manifest using the constant 
 
 ### The Manifest Format
 
-The Manifest is a 172-byte constant-length little-endian object including the manifest information, lengths and checksums for both the application and metadata, and the signing key and signature.
+The Manifest is a 212-byte constant-length little-endian object including the manifest information, application name ane version strings, lengths and checksums for both the application and metadata, and the signing key and signature.
 
-```text
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|       MANIFEST_VERSION        |         MANIFEST_FLAGS        |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                        APP_LENGTH (u32)                       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-/                         APP_CHECKSUM                          /
-/                   (256-bit truncated SHA512)                  /
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|           META_KIND           |       META_LENGTH (u16)       |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-/                        META_CHECKSUM                          /
-/                   (256-bit truncated SHA512)                  /
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-/                         SIGNING KEY                           /
-/                      (ED25519 Public Key)                     /
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                                                               |
-/                          SIGNATURE                            /
-/                      (ED25519 Signature)                      /
-|                                                               |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
+See the [docs](https://docs.rs/fwsig/latest/fwsig/struct.Manifest.html) for a detailed layout.
 
 To simplify parsing manifest objects are _always_ signed. If trusted keys are not provided a temporary key is generated for the signing operation and the `TRANSIENT_KEY` flag is set.
 

@@ -8,3 +8,6 @@ pub use checksum::*;
 
 mod signature;
 pub use signature::*;
+
+mod stringish;
+pub use stringish::*;

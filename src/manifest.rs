@@ -12,7 +12,8 @@ use strum::{Display, EnumString, EnumVariantNames};
 
 use crate::{
     error::ManifestError,
-    types::{PublicKey, Checksum, Signature, PrivateKey}, VerifyError,
+    types::{PublicKey, Checksum, Signature, PrivateKey, Stringish},
+    VerifyError,
 };
 
 /// Manifest version identifier, MUST be 0x0001, MAY be extended in following versions
@@ -20,6 +21,7 @@ pub const MANIFEST_VERSION: u16 = 0x0001;
 
 /// Encoded manifest length, constant to simplify parsing when included in binary form
 pub const MANIFEST_LEN: usize = 2 + 2 
+    + 16 + 24
     + 4 + 32 
     + 2 + 2 + 32 
     + ed25519_dalek::PUBLIC_KEY_LENGTH
@@ -45,12 +47,60 @@ bitflags! {
 }
 
 /// Applet manifest, links app and metadata checksums with overall applet signature
+/// 
+/// ```text
+/// 0                   1                   2                   3
+/// 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|       MANIFEST_VERSION        |         MANIFEST_FLAGS        |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+///|                            APP_NAME                           |
+///|                   (16-byte zero padded utf8)                  |
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+////                           APP_VERSION                         /
+////                   (24-byte zero padded utf8)                  /
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                        APP_LENGTH (u32)                       |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+////                         APP_CHECKSUM                          /
+////                   (256-bit truncated SHA512)                  /
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|           META_KIND           |       META_LENGTH (u16)       |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+////                        META_CHECKSUM                          /
+////                   (256-bit truncated SHA512)                  /
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+////                         SIGNING KEY                           /
+////                      (ED25519 Public Key)                     /
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///|                                                               |
+////                          SIGNATURE                            /
+////                      (ED25519 Signature)                      /
+///|                                                               |
+///+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+///```
 #[derive(Clone, Debug, PartialEq, Encode, DecodeOwned)]
 pub struct Manifest {
     /// Manifest version (must be 1)
     pub version: u16,
     /// Manifest flags
     pub flags: u16,
+
+    /// Application name (utf8, zero-padded)
+    pub app_name: Stringish<16>,
+
+    /// Application Version (utf8, zero-padded)
+    pub app_version: Stringish<24>,
 
     /// Application binary length
     pub app_len: u32,
@@ -80,6 +130,16 @@ impl Manifest {
     /// Fetch manifest flags
     pub fn flags(&self) -> Flags {
         Flags::from_bits_truncate(self.flags)
+    }
+
+    /// Fetch app name
+    pub fn app_name(&self) -> &str {
+        self.app_name.as_ref()
+    }
+
+    /// Fetch app version
+    pub fn app_version(&self) -> &str {
+        self.app_version.as_ref()
     }
 
     /// Fetch app length
@@ -204,12 +264,16 @@ impl Manifest {
 
     /// Compute digest of manifest for signing
     /// 
-    /// (this is equivalent to but avoids the need to encode prior to signing)
+    /// (this is equivalent to computing the digest over the encoded object,
+    /// while avoiding the need to encode prior to signing)
     fn digest(&self) -> Sha512 {
         let mut h = Sha512::new();
 
         h.update(&self.version.to_le_bytes());
         h.update(&self.flags.to_le_bytes());
+
+        h.update(&self.app_name.deref());
+        h.update(&self.app_version.deref());
 
         h.update(&self.app_len.to_le_bytes());
         h.update(&self.app_csum.deref());
@@ -241,6 +305,8 @@ mod tests {
         let mut m = Manifest {
             version: MANIFEST_VERSION,
             flags: Flags::TRANSIENT_KEY.bits(),
+            app_name: "test_app".into(),
+            app_version: "1.2.7".into(),
             app_len: 64 * 1024,
             app_csum: Checksum::compute(&[0xab; 32]),
             meta_len: 1024,
@@ -284,6 +350,8 @@ mod tests {
         let m = Manifest {
             version: MANIFEST_VERSION,
             flags: Flags::TRANSIENT_KEY.bits(),
+            app_name: "test_app".into(),
+            app_version: "1.2.7".into(),
             app_len: 64 * 1024,
             app_csum: Checksum::compute(&[0xab; 32]),
             meta_len: 1024,
