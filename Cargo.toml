@@ -2,7 +2,7 @@
 name = "fwsig"
 description = "A specification (and tools) for firmware signing / verification"
 repository = "https://github.com/ryankurte/fwsig"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MPL-2.0"
 
